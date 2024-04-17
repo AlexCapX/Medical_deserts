@@ -22,42 +22,84 @@ st.set_page_config(
 )
 
 ### TITLE AND TEXT
-st.title("Medical deserts statistics 👨‍⚕️")
+st.title("les deserts medicaux en France 👨‍⚕️")
 
 st.markdown("""
-    Welcome to the medical deserts dashboard ! Please find some useful statistics for France. Enjoy !!! Bla bla bla ! """)
+    Bienvenu sur le tableau de bord des deserts medicaux ! Vous trouverez sur ce site des informations utiles pour comprendre et identifier les deserts medicaux en France.""")
 
 ### LOAD AND CACHE DATA
 # URL of the CSV file of APL data
-APL_URL = 'https://medical-deserts-project.s3.eu-north-1.amazonaws.com/map.csv'
+GEO_URL = 'https://medical-deserts-project.s3.eu-north-1.amazonaws.com/geo.geojson'
 
-@st.cache_resource # this lets the 
-def load_data(url):
-    data = pd.read_csv(url)
-    return data
+@st.cache_data # this lets the 
+def load_geojson(url):
+    geo_data = gpd.read_file(url)
+    return geo_data
 
 data_load_state = st.text('Loading data...')
-data_apl = load_data(APL_URL)
+geo_apl = load_geojson(GEO_URL)
 data_load_state.text("") # change text from "Loading data..." to "" once the the load_data function has run
 
-#### CREATE TWO COLUMNS
+### TRANSFORM GEOJSON TO PANDAS
+def geojson_to_dataframe(geo_apl):
+    geo_apl = geo_apl.to_crs(epsg=4326)
+    geo_apl_pd = geo_apl.drop(columns='geometry')
+    return geo_apl_pd
+
+### SIDEBAR
+st.sidebar.header("Deserts medicaux")
+st.sidebar.markdown("""
+    * [Qu'est-ce qu'un desert medical ?](#qu-est-ce-qu-un-desert-medical)
+    * [Pour mieux comprendre](#pour-mieux-comprendre)
+    * [Comment les identifier ?](#comment-les-identifier)
+    * [Quelques chiffres](#quelques-chiffres)
+    * [Vivez-vous dans un desert medical ?](#vivez-vous-dans-un-desert-medical)
+
+""")
+e = st.sidebar.empty()
+e.write("")
+st.sidebar.write("Made with 💖 by Claudine, Jean-David et Alexandre")
+
+### INTRODUCTION
+st.header("Qu'est-ce qu'un desert medical ?")
+st.markdown("""
+    Un désert médical désigne une zone géographique où la population rencontre des difficultés pour accéder à des soins de santé. 
+    La densité en professionnels ou établissements du secteur de la santé, en particulier en médecins, est, rapportée à sa population et ses besoins, nettement plus faible que dans le reste du pays.
+""")
+
+### VIDEO
+st.header("Pour mieux comprendre")
+with st.expander("⏯️ 85% des français vident dans un désert medical"):
+    st.video("https://youtu.be/tuV_Av1MGAg?feature=shared")
+
+st.markdown("---")
+
+### APL def
+st.header("Comment les identifier ?")
+st.markdown("""
+    Afin de pouvoir identifier ces deserts medicaux, l'etat a decidé de mettre en place un indicateur statistiques : l’APL (Accessibilité Potentielle Localisée).
+    L'APL mesure l’adéquation spatiale entre l’offre et la demande de soins de premier recours. 
+    En d'autres termes, il permet d’évaluer, pour chaque commune et pour une année précise, le niveau d’accès aux médecins généralistes de ses habitants.
+""")
+
+#### GRAPHS WITH TWO COLUMNS
+
+st.header("Quelques chiffres")
 col1, col2 = st.columns(2)
 
 with col1:
     ### APL pies
-
-    # Define color mapping dictionary
-    color_mapping = {
-        "Commune carrencée (APL < 2.5)": "red",
-        "Offre insuffisante (2.5 < APL < 4)": "orange",
-        "Offre satisfaisante (APL > 4)": "green"
-    }
-
-    # Function to plot the pie chart based on the selected column
     def plot_pie_chart(column_name, fig, row, col):
         # Count occurrences of each value in the specified column
-        column_counts = data_apl[column_name].value_counts().reset_index()
+        column_counts = geo_apl[column_name].value_counts().reset_index()
         column_counts.columns = [column_name, 'Count']
+        
+        # Define color mapping dictionary
+        color_mapping = {
+            "Commune carrencée (APL < 2.5)": "red",
+            "Offre insuffisante (2.5 < APL < 4)": "orange",
+            "Offre satisfaisante (APL > 4)": "green"
+        }
         
         # Create the pie chart
         fig_pie = go.Pie(labels=column_counts[column_name], values=column_counts['Count'])
@@ -66,71 +108,34 @@ with col1:
         # Add the pie chart to the specified subplot position
         fig.add_trace(fig_pie, row=row, col=col)
 
-    # Main function for Streamlit app
-    def main():
-        st.title("Pie Chart Dashboard")
-        
+    def pie():
+        st.markdown("Répartion des status APL")
+
         # Create a figure with three subplots arranged horizontally
         fig = make_subplots(rows=1, cols=3, specs=[[{'type':'pie'}, {'type':'pie'}, {'type':'pie'}]], horizontal_spacing=0.05, subplot_titles=("APL status (sans borne d'âge)", "APL status 65 et moins", "APL status 62 et moins"), row_titles=[""], shared_yaxes=False)
-        
+
         # Plot each pie chart in its respective subplot
         plot_pie_chart("APL status (sans borne d'âge)", fig, 1, 1)
         plot_pie_chart("APL status 65 et moins", fig, 1, 2)
         plot_pie_chart("APL status 62 et moins", fig, 1, 3)
-        
+
         # Update the layout to center the legend horizontally
         fig.update_layout(
             legend=dict(
                 x=0.5,
                 y=-0.1,
-                xanchor='center',  # Center horizontally
+                xanchor='center',
                 orientation="h"
             ), 
-            #width=900,
-            #height=600 
-        )
-        
-        # Render the plotly figure using Streamlit's plotly_chart function
-        st.plotly_chart(fig, use_container_width=True)
-
-    # Call the main function to run the Streamlit app
-    if __name__ == "__main__":
-        main()
-
-    ### Box graph
-
-    # Main function for Streamlit app
-    def box():
-        st.title("Résumé des données APL")
-
-        # Create the box plot
-        fig = px.box(data_apl, 
-                    y=["APL aux médecins généralistes de 62 ans et moins", 
-                        "APL aux médecins généralistes de 65 ans et moins", 
-                        "APL aux médecins généralistes (sans borne d'âge)"], 
-                    title="Résumé des données APL")
-
-        fig.update_yaxes(title="Score APL")
-        fig.update_xaxes(title="")
-
-        fig.update_layout(
-            title=dict(
-                x=0.5
-            ), 
-            #width=900,
-            #height=600 
         )
 
-        # Render the plotly figure using Streamlit's plotly_chart function
         st.plotly_chart(fig, use_container_width=True)
 
-    # Call the main function to run the Streamlit app
     if __name__ == "__main__":
-        box()
+        pie()
 
 with col2:
-### APL map
-
+    ### APL map
     colors = [(0.0, 'red'),     # Red for values <= 0
             (0.25, 'orange'), # Orange for values between 0 and 2
             (0.75, 'yellow'), # Yellow for values between 2 and 3
@@ -140,8 +145,8 @@ with col2:
     custom_cmap = LinearSegmentedColormap.from_list('custom_cmap', colors)
 
     # Main function for Streamlit app
-    def map(data_apl):
-        st.title("Custom Data Plotting")
+    def map(geo_apl):
+        st.markdown("Carte des APLs")
 
         # Create a dropdown menu with the available columns
         column_dropdown = st.selectbox('Choisir une colonne :', options=["APL aux médecins généralistes (sans borne d'âge)", 
@@ -150,7 +155,7 @@ with col2:
 
         # Plot the data using GeoPandas
         fig, ax = plt.subplots()
-        data_apl.plot(column=column_dropdown, cmap=custom_cmap, legend=True, ax=ax)
+        geo_apl.plot(column=column_dropdown, cmap=custom_cmap, legend=True, ax=ax, vmin=0, vmax=4, edgecolor='grey', linewidth=0.2)
         
         # Show a title
         ax.set_title(column_dropdown)
@@ -163,69 +168,37 @@ with col2:
 
     # Call the main function to run the Streamlit app
     if __name__ == "__main__":
-        map(data_apl)
+        map(geo_apl)
 
-    
-###########################################################################################################################
-"""
-### Data
-DATA_URL = './data.csv'
-def load_data():
-    data = pd.read_csv(DATA_URL)
-    data["dateRep"] = pd.to_datetime(data["dateRep"])
-    data = data[(data['cases'] >= 0) & (data['deaths'] >= 0)]
-    return data
+### SHOW DATASET
 
-data_load_state = st.text('Loading data...')
-data = load_data()
-data_load_state.text("") # change text from "Loading data..." to "" once the the load_data function has run
+# Transform GeoDataFrame to pandas DataFrame
+geo_apl_pd = geojson_to_dataframe(geo_apl)
+st.header("Vivez-vous dans un desert medical ?")
 
-## Run the below code if the check is checked ✅
-if st.checkbox('Show raw data'):
-    st.subheader('Raw data')
-    st.write(data) 
+# Display dropdown menus for filters
+selected_city = st.selectbox("Sélectionnez une ville :", [""] + list(geo_apl_pd["Ville"].unique()))
+selected_department = st.selectbox("Sélectionnez un département :", [""] + list(geo_apl_pd["departement"].unique()))
+selected_region = st.selectbox("Sélectionnez une région :", [""] + list(geo_apl_pd["region"].unique()))
 
-st.markdown('### World analysis')
-st.markdown('#### Cumulated cases')
+# Add a button to reset filters
+if st.button("Réinitialiser les filtres"):
+    # Reset widget values
+    selected_city = ""
+    selected_department = ""
+    selected_region = ""
 
-data2 = data.loc[:, ['dateRep', 'cases']].groupby('dateRep').sum().reset_index()
-data2['cumsum'] = data2['cases'].cumsum()
-fig = px.area(data2, x='dateRep', y='cumsum')
-st.plotly_chart(fig, use_container_width=True)
+# Filter the dataset based on selections
+filtered_data = geo_apl_pd.copy()  # Copy the original dataset to avoid unexpected modifications
 
-st.markdown('#### Death per country')
-country = st.selectbox("Select a country you want to see deaths", data["countriesAndTerritories"].sort_values().unique())
-min_date = data[(data["countriesAndTerritories"]==country)]['dateRep'].min()
-max_date = data[(data["countriesAndTerritories"]==country)]['dateRep'].max()
-with st.form('Death per country'):
-    start_period = st.date_input("Select a start date", value=min_date, min_value=min_date, max_value=max_date)
-    end_period = st.date_input("Select an end date", value=max_date, min_value=min_date, max_value=max_date)
-    submit = st.form_submit_button("submit")
+if selected_city:
+    filtered_data = filtered_data[filtered_data["Ville"] == selected_city]
 
-mask = (data["countriesAndTerritories"]==country) & (data["dateRep"]>=pd.to_datetime(start_period)) & (data["dateRep"]<=pd.to_datetime(end_period))
-fig = px.line(data[mask].sort_values('dateRep'), x='dateRep', y='deaths')
-st.plotly_chart(fig, use_container_width=True)
+if selected_department:
+    filtered_data = filtered_data[filtered_data["departement"] == selected_department]
 
-st.markdown('#### Map deaths')
-data3 = data.loc[:, ['countriesAndTerritories', 'deaths']].groupby('countriesAndTerritories').sum().reset_index()
-fig = px.choropleth(data3, 
-                    locations='countriesAndTerritories', 
-                    locationmode='country names',
-                    color='deaths', 
-                    hover_name='countriesAndTerritories', 
-                    color_continuous_scale='reds' 
-                   )
+if selected_region:
+    filtered_data = filtered_data[filtered_data["region"] == selected_region]
 
-
-fig.update_layout(title='COVID-19 deaths',
-                  geo=dict(showcoastlines=True,
-                           projection_type='natural earth', 
-                           center=dict(lat=50, lon=10), 
-                           scope="europe",
-                           ),
-                  mapbox_style="carto-positron",
-                 width= 600)
-
-fig.update_geos(projection_scale=1.5)
-st.plotly_chart(fig, use_container_width=True)
-"""
+# Display the filtered dataset
+st.write(filtered_data)
